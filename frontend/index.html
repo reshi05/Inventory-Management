@@ -1,0 +1,186 @@
+<!doctype html>
+<html ng-app="inventoryApp">
+<head>
+  <meta charset="utf-8" />
+  <title>Inventory Management - AngularJS</title>
+  <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.8.3/angular.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 1000px; margin: 20px auto; }
+    .card { border: 1px solid #ddd; padding: 16px; border-radius: 8px; margin-bottom: 16px; }
+    .row { display:flex; gap:12px; flex-wrap:wrap; }
+    label { display:block; font-size:12px; color:#333; margin-bottom:6px; }
+    input, select { padding:8px; width:100%; box-sizing:border-box; }
+    table { width:100%; border-collapse:collapse; margin-top:12px; }
+    th, td { padding:8px; border-bottom:1px solid #eee; text-align:left; }
+    .btn { padding:8px 12px; border:none; border-radius:6px; cursor:pointer; }
+    .btn-primary { background:#1976d2; color:white; }
+    .btn-danger { background:#d32f2f; color:white; }
+    .small { font-size:12px; color:#666; }
+  </style>
+</head>
+<body ng-controller="MainCtrl">
+
+  <h2>Inventory Management of HomeDecors</h2>
+
+  <div class="card">
+    <h3>Add New Item</h3>
+    <form ng-submit="addItem()" name="addForm" novalidate>
+      <div class="row">
+        <div style="flex:2">
+          <label>Product name *</label>
+          <input ng-model="newItem.product_name" required />
+        </div>
+        <div style="flex:1">
+          <label>SKU *</label>
+          <input ng-model="newItem.sku" ng-change="checkSKU(newItem.sku)" required />
+          <div class="small" ng-if="skuExists" style="color:#d32f2f">SKU already exists</div>
+        </div>
+        <div style="flex:1">
+          <label>Quantity</label>
+          <input type="number" ng-model="newItem.quantity" />
+        </div>
+        <div style="flex:1">
+          <label>Price</label>
+          <input type="number" step="0.01" ng-model="newItem.price" />
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:12px">
+        <div style="flex:1">
+          <label>Location</label>
+          <input ng-model="newItem.location" />
+        </div>
+        <div style="flex:1">
+          <label>Category (ID)</label>
+          <input ng-model="newItem.category_id" />
+        </div>
+        <div style="flex:1">
+          <label>Supplier (ID)</label>
+          <input ng-model="newItem.supplier_id" />
+        </div>
+        <div style="flex:1; align-self: flex-end;">
+          <button class="btn btn-primary" type="submit" ng-disabled="addForm.$invalid || skuExists">Add Item</button>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <div class="card">
+    <h3>Inventory List</h3>
+    <div class="small">Click Edit to update, Delete to remove (confirm required).</div>
+    <table>
+      <thead>
+        <tr><th>#</th><th>Name</th><th>SKU</th><th>Qty</th><th>Price</th><th>Location</th><th>Actions</th></tr>
+      </thead>
+      <tbody>
+        <tr ng-repeat="p in products">
+          <td>{{$index+1}}</td>
+          <td>{{p.product_name}}</td>
+          <td>{{p.sku}}</td>
+          <td>{{p.quantity}}</td>
+          <td>{{p.price | number:2}}</td>
+          <td>{{p.location}}</td>
+          <td>
+            <button class="btn" ng-click="openEdit(p)">Edit</button>
+            <button class="btn btn-danger" ng-click="confirmDelete(p)">Delete</button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div ng-if="editing" class="card">
+    <h3>Edit Item</h3>
+    <form ng-submit="updateItem()">
+      <div class="row">
+        <div style="flex:2">
+          <label>Name</label>
+          <input ng-model="editing.product_name" />
+        </div>
+        <div style="flex:1">
+          <label>SKU</label>
+          <input ng-model="editing.sku" ng-change="checkSKU(editing.sku, editing.id)"/>
+          <div class="small" ng-if="skuExists" style="color:#d32f2f">SKU already exists</div>
+        </div>
+        <div style="flex:1">
+          <label>Quantity</label>
+          <input type="number" ng-model="editing.quantity" />
+        </div>
+        <div style="flex:1">
+          <label>Price</label>
+          <input type="number" step="0.01" ng-model="editing.price" />
+        </div>
+      </div>
+      <div style="margin-top:12px">
+        <button class="btn btn-primary" type="submit" ng-disabled="skuExists">Save</button>
+        <button class="btn" type="button" ng-click="cancelEdit()">Cancel</button>
+      </div>
+    </form>
+  </div>
+
+  <script>
+    angular.module('inventoryApp', [])
+      .constant('API_ROOT', 'http://localhost:4000/api')
+      .controller('MainCtrl', function($scope, $http, API_ROOT) {
+        $scope.products = [];
+        $scope.newItem = {};
+        $scope.editing = null;
+        $scope.skuExists = false;
+
+        $scope.load = function() {
+          $http.get(API_ROOT + '/products').then(res => {
+            $scope.products = res.data;
+          }, err => alert('Failed to load products'));
+        };
+
+        $scope.checkSKU = function(sku, currId) {
+          $scope.skuExists = false;
+          if (!sku) return;
+          $http.get(API_ROOT + '/products').then(res => {
+            const dup = res.data.find(p => p.sku === sku && p.id !== currId);
+            $scope.skuExists = !!dup;
+          });
+        };
+
+        $scope.addItem = function() {
+          const payload = angular.copy($scope.newItem);
+          payload.changed_by = 'demo_user';
+          $http.post(API_ROOT + '/products', payload).then(res => {
+            alert('Added');
+            $scope.newItem = {};
+            $scope.load();
+          }, err => {
+            alert(err.data?.error || 'Add failed');
+          });
+        };
+
+        $scope.openEdit = function(p) {
+          $scope.editing = angular.copy(p);
+          $scope.skuExists = false;
+        };
+
+        $scope.cancelEdit = function() { $scope.editing = null; };
+
+        $scope.updateItem = function() {
+          const payload = angular.copy($scope.editing);
+          payload.changed_by = 'demo_user';
+          $http.put(API_ROOT + '/products/' + payload.id, payload).then(res => {
+            alert('Updated');
+            $scope.editing = null;
+            $scope.load();
+          }, err => alert(err.data?.error || 'Update failed'));
+        };
+
+        $scope.confirmDelete = function(p) {
+          if (!confirm('Delete "' + p.product_name + '"?')) return;
+          $http.delete(API_ROOT + '/products/' + p.id, { data: { changed_by: 'demo_user' } }).then(res => {
+            alert('Deleted');
+            $scope.load();
+          }, err => alert(err.data?.error || 'Delete failed'));
+        };
+
+        $scope.load();
+      });
+  </script>
+</body>
+</html>
